@@ -269,6 +269,10 @@ def add_run_parser(subparsers):
     parser_run.add_argument("--startup_action", help="Optional startup action", default="")
     parser_run.add_argument("--keep_alive", help="Optional keep_alive", default=True)
     parser_run.add_argument("--project_folderpath", help="Optional path to project folder containing application code", default=None)
+    parser_run.add_argument(
+        "--assistant", action="store_true", default=False,
+        help="Run in assistant (non-agentic) mode. Default is agentic mode.",
+    )
     parser_run.set_defaults(func=lambda args: run_with_defaults(args))
 
 def add_run_fastapi_mcp_parser(subparsers):
