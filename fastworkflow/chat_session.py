@@ -555,6 +555,10 @@ class ChatSession:
                     self.command_output_queue:
             self.command_output_queue.put(command_output)
 
+        # Signal trace consumer that all events for this turn have been sent
+        if self.command_trace_queue:
+            self.command_trace_queue.put(None)
+
         # Persist workflow state changes
         if workflow := self.get_active_workflow():
             workflow.flush()
@@ -624,6 +628,10 @@ class ChatSession:
         if (not command_output.success or self._keep_alive) and \
             self.command_output_queue:
             self.command_output_queue.put(command_output)
+
+        # Signal trace consumer that all events for this turn have been sent
+        if self.command_trace_queue:
+            self.command_trace_queue.put(None)
 
         # Persist workflow state changes lazily accumulated during message processing.
         if workflow := self.get_active_workflow():
@@ -696,6 +704,10 @@ class ChatSession:
         if (not command_output.success or self._keep_alive) and \
             self.command_output_queue:
             self.command_output_queue.put(command_output)
+
+        # Signal trace consumer that all events for this turn have been sent
+        if self.command_trace_queue:
+            self.command_trace_queue.put(None)
 
         # Flush any pending workflow updates triggered by this startup action.
         if workflow:

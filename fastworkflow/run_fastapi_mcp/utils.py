@@ -418,6 +418,8 @@ async def collect_trace_events_async(
     while True:
         try:
             evt = trace_queue.get_nowait()
+            if evt is None:
+                break
             trace = {
                 "direction": evt.direction.value if hasattr(evt.direction, 'value') else str(evt.direction),
                 "raw_command": evt.raw_command,
