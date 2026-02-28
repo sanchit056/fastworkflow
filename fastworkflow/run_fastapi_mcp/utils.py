@@ -381,6 +381,8 @@ def collect_trace_events(runtime: 'ChannelRuntime', user_id: Optional[str] = Non
     while True:
         try:
             evt = runtime.chat_session.command_trace_queue.get_nowait()
+            if evt is None:
+                break
             trace = {
                 "direction": evt.direction.value if hasattr(evt.direction, 'value') else str(evt.direction),
                 "raw_command": evt.raw_command,
