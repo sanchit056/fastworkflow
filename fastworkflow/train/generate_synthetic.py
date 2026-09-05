@@ -78,6 +78,17 @@ except ImportError:
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_RETRY_BASE_SECONDS = 2.0
 
+MAX_COMPLETION_TOKENS = 4000
+
+
+class EmptyCompletionError(Exception):
+    """A completion returned successfully but carried no assistant content.
+
+    Nothing raises for this - the call succeeds with `content=None`. Listed in
+    RETRYABLE_LLM_EXCEPTIONS so it is re-drawn, and falls back per command if it isn't.
+    """
+
+
 # Transient failures worth retrying. Deliberately enumerated rather than catching
 # litellm.exceptions.APIError, which is the base class of AuthenticationError and
 # BadRequestError too - those are configuration or programming errors and retrying
@@ -89,6 +100,7 @@ RETRYABLE_LLM_EXCEPTIONS = (
     litellm.exceptions.ServiceUnavailableError,
     litellm.exceptions.InternalServerError,
     litellm.exceptions.BadGatewayError,
+    EmptyCompletionError,
 )
 
 # Failures that are a property of ONE command's prompt rather than of the account or
@@ -481,16 +493,28 @@ def generate_utterances_for_personas(
             }
         ]
 
+        def _draw_batch():
+            # Checked inside the retried operation, so an empty draw is re-drawn rather
+            # than returned to a caller that cannot ask for another one.
+            drawn = completion_fn(
+                model=model,  # Corrected model name
+                messages=messages,
+                max_tokens=MAX_COMPLETION_TOKENS,
+                temperature=1.0,
+                top_p=0.9,
+                stop=["<|end_of_text|>"]
+            )
+            choice = drawn.choices[0]
+            if not (getattr(choice.message, "content", None) or "").strip():
+                raise EmptyCompletionError(
+                    f"no assistant content (finish_reason="
+                    f"{getattr(choice, 'finish_reason', None)!r})"
+                )
+            return drawn
+
         try:
             response = call_with_retries(
-                lambda: completion_fn(
-                    model=model,  # Corrected model name
-                    messages=messages,
-                    max_tokens=1000,
-                    temperature=1.0,
-                    top_p=0.9,
-                    stop=["<|end_of_text|>"]
-                ),
+                _draw_batch,
                 description=(
                     f"Utterance generation for '{command_name}' "
                     f"(personas {batch_start + 1}-{batch_end})"

@@ -128,6 +128,31 @@ class RaisingCompletion:
         raise self._exception_factory()
 
 
+class EmptyContentCompletion:
+    """Returns a well-formed response carrying no content, then real content.
+
+    What a reasoning model does when it spends the whole `max_tokens` budget thinking:
+    the call SUCCEEDS, so no exception is raised and `content` is None.
+    """
+
+    def __init__(self, empty_draws: int) -> None:
+        self._empty_draws = empty_draws
+        self.calls = 0
+
+    def __call__(self, **kwargs):
+        self.calls += 1
+        if self.calls <= self._empty_draws:
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(
+                        message=SimpleNamespace(content=None), finish_reason="length"
+                    )
+                ]
+            )
+        name = kwargs["messages"][0]["content"].split("[Persona_")[1].split("]")[0]
+        return _llm_response(f"[Persona_{name}]\nrecovered after a truncated draw\n")
+
+
 class ForbiddenCompletion:
     """Any call is a failure: used to prove a cache entry was (or was not) reused."""
 
@@ -375,6 +400,38 @@ def test_a_prompt_shaped_rejection_on_the_inner_loop_records_provenance_only():
     assert generated == []
     assert provenance.fell_back is True
     assert "ContentPolicyViolationError" in provenance.fallback_reason
+
+
+# ---------------------------------------------------------------------------
+# An empty completion must cost one command, not the run
+# ---------------------------------------------------------------------------
+
+def test_an_empty_completion_is_redrawn_rather_than_crashing():
+    """The call succeeded, so nothing raised and the old code hit `None.strip()`.
+
+    Re-drawing is the right response because the next draw reasons for a different
+    length; the command must come back undegraded.
+    """
+    backend = EmptyContentCompletion(empty_draws=2)
+    utterances, provenance = _generate(
+        completion_fn=backend, _max_retries=5, _retry_base_seconds=0.0
+    )
+
+    assert backend.calls > 2
+    assert provenance.fell_back is False
+    assert "recovered after a truncated draw" in utterances
+
+
+def test_an_always_empty_completion_falls_back_instead_of_aborting_the_run():
+    """Retries exhausted is still one command's problem, not the run's."""
+    backend = EmptyContentCompletion(empty_draws=1000)
+    utterances, provenance = _generate(
+        completion_fn=backend, _max_retries=2, _retry_base_seconds=0.0
+    )
+
+    assert utterances == [COMMAND_NAME] + SEED_UTTERANCES
+    assert provenance.fell_back is True
+    assert "EmptyCompletionError" in provenance.fallback_reason
 
 
 # ---------------------------------------------------------------------------
