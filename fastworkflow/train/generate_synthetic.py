@@ -78,8 +78,6 @@ except ImportError:
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_RETRY_BASE_SECONDS = 2.0
 
-MAX_COMPLETION_TOKENS = 4000
-
 
 class EmptyCompletionError(Exception):
     """A completion returned successfully but carried no assistant content.
@@ -499,7 +497,7 @@ def generate_utterances_for_personas(
             drawn = completion_fn(
                 model=model,  # Corrected model name
                 messages=messages,
-                max_tokens=MAX_COMPLETION_TOKENS,
+                max_tokens=4000,
                 temperature=1.0,
                 top_p=0.9,
                 stop=["<|end_of_text|>"]
